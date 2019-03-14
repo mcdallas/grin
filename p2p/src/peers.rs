@@ -148,7 +148,6 @@ impl Peers {
 
 	/// Number of peers currently connected to.
 	pub fn peer_count(&self) -> u32 {
-		self.connected_peers().len() as u32
 		let npeers = self.peers
 			.read()
 			.values()
@@ -160,9 +159,8 @@ impl Peers {
 
 	/// Number of outbound peers currently connected to.
 	pub fn peer_outbound_count(&self) -> u32 {
-		self.outgoing_connected_peers().len() as u32
-		
-		let npeers = self.peers
+		let npeers = self
+			.peers
 			.read()
 			.values()
 			.filter(|x| x.is_connected() && x.info.is_outbound())

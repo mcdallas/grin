@@ -31,7 +31,6 @@ use std::{
 };
 
 use crate::core::ser;
-use core::global::STATS;
 use crate::core::ser::FixedLength;
 use crate::msg::{
 	read_body, read_discard, read_header, read_item, write_to_buf, MsgHeader, MsgHeaderWrapper,
@@ -40,6 +39,7 @@ use crate::msg::{
 use crate::types::Error;
 use crate::util::read_write::{read_exact, write_all};
 use crate::util::{RateCounter, RwLock};
+use core::global::STATS;
 
 /// A trait to be implemented in order to receive messages from the
 /// connection. Allows providing an optional response.
@@ -140,13 +140,7 @@ impl<'a> Response<'a> {
 		msg.append(&mut self.body);
 		write_all(&mut self.stream, &msg[..], time::Duration::from_secs(10))?;
 		tracker.inc_sent(msg.len() as u64);
-		// Increase sent bytes counter
-		{
-			let mut sent_bytes = sent_bytes.write();
-			sent_bytes.inc(msg.len() as u64);
-			// STATS.count("p2p.bandwidth.sent", msg.len() as f64);
-		}
-		let payload = format!{"p2p.msg.sent.{}", self.resp_type.as_ref()};
+		let payload = format! {"p2p.msg.sent.{}", self.resp_type.as_ref()};
 		STATS.incr(&payload);
 
 		if let Some(mut file) = self.attachment {
@@ -159,8 +153,6 @@ impl<'a> Response<'a> {
 						// Increase sent bytes "quietly" without incrementing the counter.
 						// (In a loop here for the single attachment).
 						tracker.inc_quiet_sent(n as u64);
-						let mut sent_bytes = sent_bytes.write();
-						sent_bytes.inc_quiet(n as u64);
 						// STATS.count("p2p.bandwidth.sent", n as f64);
 					}
 					Err(e) => return Err(From::from(e)),

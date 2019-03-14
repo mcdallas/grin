@@ -14,11 +14,11 @@
 
 //! Message types that transit over the network and related serialization code.
 
+use core::global::STATS;
 use num::FromPrimitive;
 use std::fmt;
 use std::io::{Read, Write};
 use std::time;
-use core::global::STATS;
 
 use crate::core::core::hash::Hash;
 use crate::core::core::BlockHeader;
@@ -51,7 +51,7 @@ const MAINNET_MAGIC: [u8; 2] = [97, 61];
 /// Types of messages.
 /// Note: Values here are *important* so we should only add new values at the
 /// end.
-enum_from_primitive!{
+enum_from_primitive! {
 	#[derive(Debug, Clone, Copy, PartialEq, AsRefStr)]
 	pub enum Type {
 		Error = 0,
@@ -144,20 +144,6 @@ pub fn read_header(
 		read_exact(stream, &mut head, time::Duration::from_secs(10), false)?;
 	}
 	let header = ser::deserialize::<MsgHeaderWrapper>(&mut &head[..])?;
-	let max_len = max_msg_size(header.msg_type);
-
-	// TODO 4x the limits for now to leave ourselves space to change things
-	if header.msg_len > max_len * 4 {
-		error!(
-			"Too large read {}, had {}, wanted {}.",
-			header.msg_type as u8, max_len, header.msg_len
-		);
-		return Err(Error::Serialization(ser::Error::TooLargeReadErr));
-	}
-	// let msgtype = header.msg_type.as_ref();
-	// let payload = format!{"p2p.msg.received.{}", msgtype};
-	// STATS.incr(&payload);
-
 	Ok(header)
 }
 
@@ -677,7 +663,7 @@ impl Readable for BanReason {
 		};
 
 		let ban_reason = ReasonForBan::from_i32(ban_reason_i32).ok_or(ser::Error::CorruptedData)?;
-		let payload = format!{"p2p.banned.{}", ban_reason.as_ref()};
+		let payload = format! {"p2p.banned.{}", ban_reason.as_ref()};
 		STATS.incr(&payload);
 
 		Ok(BanReason { ban_reason })

@@ -36,6 +36,7 @@ use crate::types::{
 	TxHashSetRead,
 };
 use chrono::prelude::{DateTime, Utc};
+use crate::core::global::STATS;
 
 const MAX_TRACK_SIZE: usize = 30;
 const MAX_PEER_MSG_PER_MIN: u64 = 500;
