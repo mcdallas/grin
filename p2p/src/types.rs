@@ -344,7 +344,7 @@ enum_from_primitive! {
 
 // Ban reason
 enum_from_primitive! {
-	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, AsRefStr)]
 	pub enum ReasonForBan {
 		None = 0,
 		BadBlock = 1,
