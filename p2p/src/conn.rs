@@ -39,6 +39,7 @@ use crate::msg::{
 use crate::types::Error;
 use crate::util::read_write::{read_exact, write_all};
 use crate::util::{RateCounter, RwLock};
+use core::global::STATS;
 
 /// A trait to be implemented in order to receive messages from the
 /// connection. Allows providing an optional response.
@@ -139,6 +140,8 @@ impl<'a> Response<'a> {
 		msg.append(&mut self.body);
 		write_all(&mut self.stream, &msg[..], time::Duration::from_secs(10))?;
 		tracker.inc_sent(msg.len() as u64);
+		let payload = format! {"p2p.msg.sent.{}", self.resp_type.as_ref()};
+		STATS.incr(&payload);
 
 		if let Some(mut file) = self.attachment {
 			let mut buf = [0u8; 8000];
@@ -150,6 +153,7 @@ impl<'a> Response<'a> {
 						// Increase sent bytes "quietly" without incrementing the counter.
 						// (In a loop here for the single attachment).
 						tracker.inc_quiet_sent(n as u64);
+						// STATS.count("p2p.bandwidth.sent", n as f64);
 					}
 					Err(e) => return Err(From::from(e)),
 				}
@@ -235,18 +239,22 @@ impl Tracker {
 
 	pub fn inc_received(&self, size: u64) {
 		self.received_bytes.write().inc(size);
+		STATS.count("p2p.bandwidth.sent", size as f64);
 	}
 
 	pub fn inc_sent(&self, size: u64) {
 		self.sent_bytes.write().inc(size);
+		STATS.count("p2p.bandwidth.sent", size as f64);
 	}
 
 	pub fn inc_quiet_received(&self, size: u64) {
 		self.received_bytes.write().inc_quiet(size);
+		STATS.count("p2p.bandwidth.received", size as f64);
 	}
 
 	pub fn inc_quiet_sent(&self, size: u64) {
 		self.sent_bytes.write().inc_quiet(size);
+		STATS.count("p2p.bandwidth.sent", size as f64);
 	}
 }
 
@@ -310,6 +318,9 @@ where
 							msg.header.msg_type,
 							msg.header.msg_len
 						);
+						let payload = format!{"p2p.msg.received.{}", msg.header.msg_type.as_ref()};
+						STATS.incr(&payload);
+						// STATS.count("p2p.bandwidth.received", MsgHeader::LEN as f64 + msg.header.msg_len as f64);
 
 						// Increase received bytes counter
 						tracker.inc_received(MsgHeader::LEN as u64 + msg.header.msg_len);

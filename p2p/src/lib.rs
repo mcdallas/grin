@@ -35,6 +35,9 @@ use grin_util as util;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
 
 mod conn;
 pub mod handshake;

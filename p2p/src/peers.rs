@@ -37,6 +37,7 @@ use chrono::prelude::*;
 use chrono::Duration;
 
 const LOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+use ::core::global::STATS;
 
 pub struct Peers {
 	pub adapter: Arc<dyn ChainAdapter>,
@@ -94,6 +95,7 @@ impl Peers {
 			last_connected: Utc::now().timestamp(),
 		};
 		debug!("Banning peer {}.", addr);
+		STATS.incr(&format!("peers.ban.{}", ban_reason.as_ref()));
 		self.save_peer(&peer_data)
 	}
 
@@ -147,12 +149,27 @@ impl Peers {
 
 	/// Number of peers currently connected to.
 	pub fn peer_count(&self) -> u32 {
-		self.connected_peers().len() as u32
+		let npeers = self.peers
+			.read()
+			.values()
+			.filter(|x| x.is_connected())
+			.count() as u32;
+		let out = self.peer_outbound_count();
+		let inb = npeers - out;
+		STATS.gauge("peers.connected.inbound", inb.into());
+		npeers
 	}
 
 	/// Number of outbound peers currently connected to.
 	pub fn peer_outbound_count(&self) -> u32 {
-		self.outgoing_connected_peers().len() as u32
+		let npeers = self
+			.peers
+			.read()
+			.values()
+			.filter(|x| x.is_connected() && x.info.is_outbound())
+			.count() as u32;
+		STATS.gauge("peers.connected.outbound", npeers.into());
+		npeers
 	}
 
 	// Return vec of connected peers that currently advertise more work
@@ -262,6 +279,7 @@ impl Peers {
 			};
 			peers.remove(&peer.info.addr);
 		}
+		STATS.incr(&format!("peers.ban.{}", ban_reason.as_ref()));
 	}
 
 	/// Unban a peer, checks if it exists and banned then unban
@@ -273,6 +291,7 @@ impl Peers {
 					if let Err(e) = self.update_state(peer_addr, State::Healthy) {
 						error!("Couldn't unban {}: {:?}", peer_addr, e);
 					}
+					STATS.incr("peers.unban");
 				} else {
 					error!("Couldn't unban {}: peer is not banned", peer_addr);
 				}

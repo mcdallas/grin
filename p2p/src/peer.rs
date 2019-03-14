@@ -36,6 +36,7 @@ use crate::types::{
 	TxHashSetRead,
 };
 use chrono::prelude::{DateTime, Utc};
+use crate::core::global::STATS;
 
 const MAX_TRACK_SIZE: usize = 30;
 const MAX_PEER_MSG_PER_MIN: u64 = 500;
@@ -226,6 +227,8 @@ impl Peer {
 	fn send<T: Writeable>(&self, msg: T, msg_type: Type) -> Result<(), Error> {
 		let bytes = self.send_handle.lock().send(msg, msg_type)?;
 		self.tracker.inc_sent(bytes);
+		let payload = format!{"p2p.msg.sent.{}", msg_type.as_ref()};
+		STATS.incr(&payload);
 		Ok(())
 	}
 

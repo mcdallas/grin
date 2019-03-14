@@ -14,6 +14,8 @@
 
 use crate::conn::{Message, MessageHandler, Response, Tracker};
 use crate::core::core::{self, hash::Hash, CompactBlock};
+use crate::core::global::STATS;
+use crate::util::{RateCounter, RwLock};
 
 use crate::msg::{
 	BanReason, GetPeerAddrs, Headers, KernelDataResponse, Locator, PeerAddrs, Ping, Pong,
@@ -83,6 +85,10 @@ impl MessageHandler for Protocol {
 			Type::BanReason => {
 				let ban_reason: BanReason = msg.body()?;
 				error!("handle_payload: BanReason {:?}", ban_reason);
+				STATS.incr(&format!(
+					"peers.bannedme.{}",
+					ban_reason.ban_reason.as_ref()
+				));
 				Ok(None)
 			}
 
@@ -356,6 +362,7 @@ impl MessageHandler for Protocol {
 							downloaded_size as u64,
 							total_size as u64,
 						);
+						STATS.count("p2p.bandwidth.received", size as f64);
 
 						// Increase received bytes quietly (without affecting the counters).
 						// Otherwise we risk banning a peer as "abusive".

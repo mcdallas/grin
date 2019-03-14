@@ -32,6 +32,7 @@ use crate::{consensus, global};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
+use std::mem;
 use std::sync::Arc;
 use std::{error, fmt};
 
@@ -525,6 +526,18 @@ impl TransactionBody {
 		Ok(body)
 	}
 
+	pub fn size(&self) -> usize {
+		let isize = self.inputs.len() * secp::constants::PEDERSEN_COMMITMENT_SIZE;
+		let osize = self.outputs.len()
+			* (secp::constants::PEDERSEN_COMMITMENT_SIZE
+				+ secp::constants::SINGLE_BULLET_PROOF_SIZE);
+		let ksize = self.kernels.len()
+			* (mem::size_of::<TxKernel>()
+				+ secp::constants::AGG_SIGNATURE_SIZE
+				+ secp::constants::PEDERSEN_COMMITMENT_SIZE);
+		isize + osize + ksize + mem::size_of::<TransactionBody>()
+	}
+
 	/// Builds a new body with the provided inputs added. Existing
 	/// inputs, if any, are kept intact.
 	/// Sort order is maintained.
@@ -841,6 +854,12 @@ impl Transaction {
 			offset: BlindingFactor::zero(),
 			body: Default::default(),
 		}
+	}
+
+	pub fn size(&self) -> usize {
+		util::secp::constants::SECRET_KEY_SIZE
+			+ self.body.size()
+			+ std::mem::size_of::<Transaction>()
 	}
 
 	/// Creates a new transaction initialized with
