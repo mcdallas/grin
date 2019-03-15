@@ -153,7 +153,9 @@ impl Peers {
 			.values()
 			.filter(|x| x.is_connected())
 			.count() as u32;
-		STATS.gauge("peers.connected.total", npeers.into());
+		let out = self.peer_outbound_count();
+		let inb = npeers - out;
+		STATS.gauge("peers.connected.inbound", inb.into());
 		npeers
 	}
 

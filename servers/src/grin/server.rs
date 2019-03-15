@@ -47,7 +47,9 @@ use crate::p2p;
 use crate::p2p::types::PeerAddr;
 use crate::pool;
 use crate::util::file::get_first_line;
-use crate::util::{RwLock, StopState};
+use crate::util::{Mutex, RwLock, StopState};
+use std::collections::HashMap;
+use crate::core::global::STATS;
 
 /// Grin server holding internal structures.
 pub struct Server {
@@ -487,13 +489,24 @@ impl Server {
 			}
 		};
 
-		let peer_stats = self
+		let peer_stats: Vec<PeerStats> = self
 			.p2p
 			.peers
 			.connected_peers()
 			.into_iter()
 			.map(|p| PeerStats::from_peer(&p))
 			.collect();
+
+		let mut agents: HashMap<String, u32> = HashMap::new();
+		for p in peer_stats.iter() {
+			let counter = agents.entry(p.user_agent.clone()).or_insert(0);
+    		*counter += 1;
+		}
+		for (agent, count) in agents {
+			let payload = format!("peers.connected.agent.{}", agent);
+			STATS.gauge(&payload, count.into());
+		}
+		
 		Ok(ServerStats {
 			peer_count: self.peer_count(),
 			head: self.head()?,
