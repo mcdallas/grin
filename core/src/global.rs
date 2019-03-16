@@ -32,6 +32,7 @@ extern crate statsd;
 use statsd::Client;
 
 lazy_static! {
+	/// Statsd client
 	pub static ref STATS: Client = Client::new(
 		"127.0.0.1:8125",
 		match is_floonet() {

@@ -42,6 +42,7 @@ use crate::util::OneTime;
 use chrono::prelude::*;
 use chrono::Duration;
 use rand::prelude::*;
+use crate::core::global::STATS;
 
 /// Implementation of the NetAdapter for the . Gets notified when new
 /// blocks and transactions are received and forwards to the chain and pool
@@ -531,6 +532,9 @@ impl NetToChainAdapter {
 			Ok(_) => {
 				self.validate_chain(bhash);
 				self.check_compact();
+				let txhashset = self.chain.clone().upgrade().unwrap().txhashset();
+				STATS.gauge("chain.utxo.size", txhashset.read().utxo_size() as f64);
+				STATS.gauge("chain.kernel.size", txhashset.read().kernels_size() as f64);
 				Ok(true)
 			}
 			Err(ref e) if e.is_bad_data() => {
