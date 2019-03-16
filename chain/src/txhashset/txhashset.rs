@@ -240,10 +240,11 @@ impl TxHashSet {
 
 	pub fn utxo_size(&self) -> u64 {
 		let mut counter = 0;
-		let output_pmmr = ReadonlyPMMR::at(&self.output_pmmr_h.backend, self.output_pmmr_h.last_pos);
+		let output_pmmr =
+			ReadonlyPMMR::at(&self.output_pmmr_h.backend, self.output_pmmr_h.last_pos);
 		for n in 1..output_pmmr.unpruned_size() + 1 {
 			if pmmr::is_leaf(n) {
-				if let Some(out) = output_pmmr.get_data(n) {
+				if let Some(_) = output_pmmr.get_data(n) {
 					counter += 1;
 				}
 			}
@@ -251,12 +252,14 @@ impl TxHashSet {
 		counter
 	}
 
+	/// return size of the kernel set
 	pub fn kernels_size(&self) -> u64 {
 		let mut counter = 0;
-		let kernel_pmmr = ReadonlyPMMR::at(&self.kernel_pmmr_h.backend, self.kernel_pmmr_h.last_pos);
+		let kernel_pmmr =
+			ReadonlyPMMR::at(&self.kernel_pmmr_h.backend, self.kernel_pmmr_h.last_pos);
 		for n in 1..kernel_pmmr.unpruned_size() + 1 {
 			if pmmr::is_leaf(n) {
-				if let Some(kernel) = kernel_pmmr.get_data(n) {
+				if let Some(_) = kernel_pmmr.get_data(n) {
 					counter += 1;
 				}
 			}
