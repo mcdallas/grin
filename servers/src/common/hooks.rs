@@ -23,6 +23,7 @@ use crate::chain::BlockStatus;
 use crate::common::types::{ServerConfig, WebHooksConfig};
 use crate::core::core;
 use crate::core::core::hash::Hashed;
+use crate::core::global::STATS;
 use crate::p2p::types::PeerAddr;
 use futures::future::Future;
 use hyper::client::HttpConnector;
@@ -45,6 +46,7 @@ pub fn init_net_hooks(config: &ServerConfig) -> Vec<Box<dyn NetEvents + Send + S
 	{
 		list.push(Box::new(WebHook::from_config(&config.webhook_config)));
 	}
+	list.push(Box::new(Stats));
 	list
 }
 
@@ -55,6 +57,7 @@ pub fn init_chain_hooks(config: &ServerConfig) -> Vec<Box<dyn ChainEvents + Send
 	if config.webhook_config.block_accepted_url.is_some() {
 		list.push(Box::new(WebHook::from_config(&config.webhook_config)));
 	}
+	list.push(Box::new(Stats));
 	list
 }
 
@@ -76,6 +79,40 @@ pub trait NetEvents {
 pub trait ChainEvents {
 	/// Triggers when a new block is accepted by the chain (might be a Reorg or a Fork)
 	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {}
+}
+
+
+struct Stats;
+
+impl NetEvents for Stats {
+	fn on_transaction_received(&self, _tx: &core::Transaction) {
+		STATS.incr("net.txs");
+	}
+
+	fn on_block_received(&self, _block: &core::Block, _addr: &PeerAddr) {
+		STATS.incr("net.blocks");
+	}
+
+	fn on_header_received(&self, _header: &core::BlockHeader, _addr: &PeerAddr) {
+		STATS.incr("net.headers");
+	}
+}
+impl ChainEvents for Stats {
+	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {
+		let status = match status {
+			BlockStatus::Reorg => "reorg",
+			BlockStatus::Fork => "fork",
+			BlockStatus::Next => "head",
+		};
+		STATS.incr(&format!("chain.block.accepted.{}", status));
+		STATS.gauge("chain.block.height", block.header.height as f64);
+		STATS.gauge("chain.block.totaldiff", block.header.pow.total_difficulty.to_num() as f64);
+		STATS.gauge("chain.block.scaling", block.header.pow.secondary_scaling as f64);
+		STATS.gauge("chain.block.utxo.size", block.header.output_mmr_size as f64);
+		STATS.gauge("chain.block.kernel.size", block.header.kernel_mmr_size as f64);
+		let bits = format!("chain.block.edgebits.{}", block.header.pow.proof.edge_bits);
+		STATS.incr(&bits);
+	}
 }
 
 /// Basic Logger
