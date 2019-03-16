@@ -32,6 +32,7 @@ use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::transaction::Transaction;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{BlockHeader, BlockSums, CompactBlock};
+use crate::core::global::STATS;
 use crate::core::pow::Difficulty;
 use crate::core::{core, global};
 use crate::p2p;
@@ -42,7 +43,6 @@ use crate::util::OneTime;
 use chrono::prelude::*;
 use chrono::Duration;
 use rand::prelude::*;
-use crate::core::global::STATS;
 
 /// Implementation of the NetAdapter for the . Gets notified when new
 /// blocks and transactions are received and forwards to the chain and pool
