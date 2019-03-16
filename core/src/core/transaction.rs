@@ -529,7 +529,8 @@ impl TransactionBody {
 	pub fn size(&self) -> usize {
 		let isize = self.inputs.len() * secp::constants::PEDERSEN_COMMITMENT_SIZE;
 		let osize = self.outputs.len()
-			* (secp::constants::PEDERSEN_COMMITMENT_SIZE + secp::constants::SINGLE_BULLET_PROOF_SIZE);
+			* (secp::constants::PEDERSEN_COMMITMENT_SIZE
+				+ secp::constants::SINGLE_BULLET_PROOF_SIZE);
 		let ksize = self.kernels.len()
 			* (mem::size_of::<TxKernel>()
 				+ secp::constants::AGG_SIGNATURE_SIZE

@@ -14,6 +14,9 @@
 
 use crate::conn::{Message, MessageHandler, Response, Tracker};
 use crate::core::core::{self, hash::Hash, CompactBlock};
+use crate::util::{RateCounter, RwLock};
+use ::core::global::STATS;
+
 use crate::msg::{
 	BanReason, GetPeerAddrs, Headers, KernelDataResponse, Locator, PeerAddrs, Ping, Pong,
 	TxHashSetArchive, TxHashSetRequest, Type,
@@ -355,6 +358,7 @@ impl MessageHandler for Protocol {
 							downloaded_size as u64,
 							total_size as u64,
 						);
+						STATS.count("p2p.bandwidth.received", size as f64);
 
 						// Increase received bytes quietly (without affecting the counters).
 						// Otherwise we risk banning a peer as "abusive".
