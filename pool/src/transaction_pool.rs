@@ -29,6 +29,7 @@ use grin_core as core;
 use grin_util as util;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use self::core::global::STATS;
 
 /// Transaction pool implementation.
 pub struct TransactionPool {
@@ -299,6 +300,15 @@ impl TransactionPool {
 	/// Note: we only consider the txpool here as stempool is under embargo.
 	pub fn total_size(&self) -> usize {
 		self.txpool.size()
+	}
+
+	pub fn log_stats(&self) {
+		let txpoolsize: usize = self.txpool.entries.iter().map(|x| x.tx.size()).sum();
+		STATS.gauge("pool.txpool.size", txpoolsize as f64);
+		let stempoolsize: usize = self.stempool.entries.iter().map(|x| x.tx.size()).sum();
+		STATS.gauge("pool.stempool.size", stempoolsize as f64);
+		STATS.gauge("pool.txpool.txs", self.total_size() as f64);
+		STATS.gauge("pool.stempool.txs", self.stempool.size() as f64);
 	}
 
 	/// Returns a vector of transactions from the txpool so we can build a

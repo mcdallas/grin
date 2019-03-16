@@ -39,6 +39,7 @@ use crate::common::stats::{DiffBlock, DiffStats, PeerStats, ServerStateInfo, Ser
 use crate::common::types::{Error, ServerConfig, StratumServerConfig, SyncState, SyncStatus};
 use crate::core::core::hash::{Hashed, ZERO_HASH};
 use crate::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
+use crate::core::global::STATS;
 use crate::core::{consensus, genesis, global, pow};
 use crate::grin::{dandelion_monitor, seed, sync};
 use crate::mining::stratumserver;
@@ -49,7 +50,6 @@ use crate::pool;
 use crate::util::file::get_first_line;
 use crate::util::{Mutex, RwLock, StopState};
 use std::collections::HashMap;
-use crate::core::global::STATS;
 
 /// Grin server holding internal structures.
 pub struct Server {
@@ -500,13 +500,14 @@ impl Server {
 		let mut agents: HashMap<String, u32> = HashMap::new();
 		for p in peer_stats.iter() {
 			let counter = agents.entry(p.user_agent.clone()).or_insert(0);
-    		*counter += 1;
+			*counter += 1;
 		}
 		for (agent, count) in agents {
 			let payload = format!("peers.connected.agent.{}", agent);
 			STATS.gauge(&payload, count.into());
 		}
-		
+		self.tx_pool.read().log_stats();
+
 		Ok(ServerStats {
 			peer_count: self.peer_count(),
 			head: self.head()?,
