@@ -81,7 +81,6 @@ pub trait ChainEvents {
 	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {}
 }
 
-
 struct Stats;
 
 impl NetEvents for Stats {
@@ -106,10 +105,19 @@ impl ChainEvents for Stats {
 		};
 		STATS.incr(&format!("chain.block.accepted.{}", status));
 		STATS.gauge("chain.block.height", block.header.height as f64);
-		STATS.gauge("chain.block.totaldiff", block.header.pow.total_difficulty.to_num() as f64);
-		STATS.gauge("chain.block.scaling", block.header.pow.secondary_scaling as f64);
+		STATS.gauge(
+			"chain.block.totaldiff",
+			block.header.pow.total_difficulty.to_num() as f64,
+		);
+		STATS.gauge(
+			"chain.block.scaling",
+			block.header.pow.secondary_scaling as f64,
+		);
 		STATS.gauge("chain.block.utxo.size", block.header.output_mmr_size as f64);
-		STATS.gauge("chain.block.kernel.size", block.header.kernel_mmr_size as f64);
+		STATS.gauge(
+			"chain.block.kernel.size",
+			block.header.kernel_mmr_size as f64,
+		);
 		let bits = format!("chain.block.edgebits.{}", block.header.pow.proof.edge_bits);
 		STATS.incr(&bits);
 	}
