@@ -32,9 +32,9 @@ use crate::{consensus, global};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
+use std::mem;
 use std::sync::Arc;
 use std::{error, fmt};
-use std::mem;
 
 // Enum of various supported kernel "features".
 enum_from_primitive! {
@@ -528,8 +528,12 @@ impl TransactionBody {
 
 	pub fn size(&self) -> usize {
 		let isize = self.inputs.len() * secp::constants::PEDERSEN_COMMITMENT_SIZE;
-		let osize = self.outputs.len() * (secp::constants::PEDERSEN_COMMITMENT_SIZE + secp::constants::MAX_PROOF_SIZE);
-		let ksize = self.kernels.len() * (mem::size_of::<TxKernel>() + secp::constants::AGG_SIGNATURE_SIZE + secp::constants::PEDERSEN_COMMITMENT_SIZE);
+		let osize = self.outputs.len()
+			* (secp::constants::PEDERSEN_COMMITMENT_SIZE + secp::constants::SINGLE_BULLET_PROOF_SIZE);
+		let ksize = self.kernels.len()
+			* (mem::size_of::<TxKernel>()
+				+ secp::constants::AGG_SIGNATURE_SIZE
+				+ secp::constants::PEDERSEN_COMMITMENT_SIZE);
 		isize + osize + ksize + mem::size_of::<TransactionBody>()
 	}
 
@@ -852,7 +856,9 @@ impl Transaction {
 	}
 
 	pub fn size(&self) -> usize {
-		util::secp::constants::SECRET_KEY_SIZE + self.body.size() + std::mem::size_of::<Transaction>()
+		util::secp::constants::SECRET_KEY_SIZE
+			+ self.body.size()
+			+ std::mem::size_of::<Transaction>()
 	}
 
 	/// Creates a new transaction initialized with

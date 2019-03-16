@@ -21,6 +21,7 @@ use self::core::core::hash::{Hash, Hashed};
 use self::core::core::id::ShortId;
 use self::core::core::verifier_cache::VerifierCache;
 use self::core::core::{transaction, Block, BlockHeader, Transaction, Weighting};
+use self::core::global::STATS;
 use self::util::RwLock;
 use crate::pool::Pool;
 use crate::types::{BlockChain, PoolAdapter, PoolConfig, PoolEntry, PoolError, TxSource};
@@ -29,7 +30,6 @@ use grin_core as core;
 use grin_util as util;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use self::core::global::STATS;
 
 /// Transaction pool implementation.
 pub struct TransactionPool {
