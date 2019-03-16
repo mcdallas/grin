@@ -103,23 +103,25 @@ impl ChainEvents for Stats {
 			BlockStatus::Fork => "fork",
 			BlockStatus::Next => "head",
 		};
-		STATS.incr(&format!("chain.block.accepted.{}", status));
-		STATS.gauge("chain.block.height", block.header.height as f64);
-		STATS.gauge(
+		let mut pipe = STATS.pipeline();
+		pipe.incr(&format!("chain.block.accepted.{}", status));
+		pipe.gauge("chain.block.height", block.header.height as f64);
+		pipe.gauge(
 			"chain.block.totaldiff",
 			block.header.pow.total_difficulty.to_num() as f64,
 		);
-		STATS.gauge(
+		pipe.gauge(
 			"chain.block.scaling",
 			block.header.pow.secondary_scaling as f64,
 		);
-		STATS.gauge("chain.block.utxo.size", block.header.output_mmr_size as f64);
-		STATS.gauge(
+		pipe.gauge("chain.block.utxo.size", block.header.output_mmr_size as f64);
+		pipe.gauge(
 			"chain.block.kernel.size",
 			block.header.kernel_mmr_size as f64,
 		);
 		let bits = format!("chain.block.edgebits.{}", block.header.pow.proof.edge_bits);
-		STATS.incr(&bits);
+		pipe.incr(&bits);
+		pipe.send(&STATS)
 	}
 }
 
