@@ -278,7 +278,7 @@ impl Peers {
 			};
 			peers.remove(&peer.info.addr);
 		}
-		STATS.incr("peers.banned");
+		STATS.incr(&format!("peers.ban.{}", ban_reason.as_ref()));
 	}
 
 	/// Unban a peer, checks if it exists and banned then unban
@@ -290,7 +290,7 @@ impl Peers {
 					if let Err(e) = self.update_state(peer_addr, State::Healthy) {
 						error!("Couldn't unban {}: {:?}", peer_addr, e);
 					}
-					STATS.decr("peers.banned");
+					STATS.incr("peers.unban");
 				} else {
 					error!("Couldn't unban {}: peer is not banned", peer_addr);
 				}
