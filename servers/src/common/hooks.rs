@@ -99,7 +99,7 @@ impl NetEvents for Stats {
 impl ChainEvents for Stats {
 	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {
 		let status = match status {
-			BlockStatus::Reorg => "reorg",
+			BlockStatus::Reorg(_) => "reorg",
 			BlockStatus::Fork => "fork",
 			BlockStatus::Next => "head",
 		};

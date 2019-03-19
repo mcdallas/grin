@@ -85,7 +85,10 @@ impl MessageHandler for Protocol {
 			Type::BanReason => {
 				let ban_reason: BanReason = msg.body()?;
 				error!("handle_payload: BanReason {:?}", ban_reason);
-				STATS.incr(&format!("peers.bannedme.{}", ban_reason.ban_reason.as_ref()));
+				STATS.incr(&format!(
+					"peers.bannedme.{}",
+					ban_reason.ban_reason.as_ref()
+				));
 				Ok(None)
 			}
 
