@@ -95,6 +95,7 @@ impl Peers {
 			last_connected: Utc::now().timestamp(),
 		};
 		debug!("Banning peer {}.", addr);
+		STATS.incr(&format!("peers.ban.{}", ban_reason.as_ref()));
 		self.save_peer(&peer_data)
 	}
 
