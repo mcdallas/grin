@@ -48,7 +48,7 @@ use crate::p2p;
 use crate::p2p::types::PeerAddr;
 use crate::pool;
 use crate::util::file::get_first_line;
-use crate::util::{Mutex, RwLock, StopState};
+use crate::util::{RwLock, StopState};
 use std::collections::HashMap;
 
 /// Grin server holding internal structures.

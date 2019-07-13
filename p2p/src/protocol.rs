@@ -15,7 +15,6 @@
 use crate::conn::{Message, MessageHandler, Response, Tracker};
 use crate::core::core::{self, hash::Hash, CompactBlock};
 use crate::core::global::STATS;
-use crate::util::{RateCounter, RwLock};
 
 use crate::msg::{
 	BanReason, GetPeerAddrs, Headers, KernelDataResponse, Locator, PeerAddrs, Ping, Pong,

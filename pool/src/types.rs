@@ -26,7 +26,6 @@ use self::core::{consensus, global};
 use failure::Fail;
 use grin_core as core;
 use grin_keychain as keychain;
-use std::mem;
 
 /// Dandelion "epoch" length.
 const DANDELION_EPOCH_SECS: u16 = 600;
