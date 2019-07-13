@@ -239,7 +239,7 @@ impl Tracker {
 
 	pub fn inc_received(&self, size: u64) {
 		self.received_bytes.write().inc(size);
-		STATS.count("p2p.bandwidth.sent", size as f64);
+		STATS.count("p2p.bandwidth.received", size as f64);
 	}
 
 	pub fn inc_sent(&self, size: u64) {

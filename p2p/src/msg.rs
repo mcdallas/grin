@@ -645,8 +645,8 @@ impl Writeable for BanReason {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		let ban_reason_i32 = self.ban_reason as i32;
 		ban_reason_i32.write(writer)?;
-		
-		let payload = format!{"p2p.ban.{}", self.ban_reason.as_ref()};
+
+		let payload = format! {"p2p.ban.{}", self.ban_reason.as_ref()};
 		STATS.incr(&payload);
 		Ok(())
 	}
