@@ -22,7 +22,7 @@ use std::fmt;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use crate::consensus::{reward, REWARD};
+use crate::consensus::{self, reward, REWARD};
 use crate::core::committed::{self, Committed};
 use crate::core::compact_block::{CompactBlock, CompactBlockBody};
 use crate::core::hash::{DefaultHashable, Hash, Hashed, ZERO_HASH};
@@ -168,11 +168,47 @@ impl Hashed for HeaderEntry {
 	}
 }
 
+/// Some type safety around header versioning.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct HeaderVersion(pub u16);
+
+impl Default for HeaderVersion {
+	fn default() -> HeaderVersion {
+		HeaderVersion(1)
+	}
+}
+
+impl HeaderVersion {
+	/// Constructor taking the provided version.
+	pub fn new(version: u16) -> HeaderVersion {
+		HeaderVersion(version)
+	}
+}
+
+impl From<HeaderVersion> for u16 {
+	fn from(v: HeaderVersion) -> u16 {
+		v.0
+	}
+}
+
+impl Writeable for HeaderVersion {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		writer.write_u16(self.0)
+	}
+}
+
+impl Readable for HeaderVersion {
+	fn read(reader: &mut dyn Reader) -> Result<HeaderVersion, ser::Error> {
+		let version = reader.read_u16()?;
+		Ok(HeaderVersion(version))
+	}
+}
+
 /// Block header, fairly standard compared to other blockchains.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct BlockHeader {
 	/// Version of the block
-	pub version: u16,
+	pub version: HeaderVersion,
 	/// Height of this block since the genesis block (height 0)
 	pub height: u64,
 	/// Hash of the block previous to this in the chain.
@@ -203,7 +239,7 @@ impl DefaultHashable for BlockHeader {}
 impl Default for BlockHeader {
 	fn default() -> BlockHeader {
 		BlockHeader {
-			version: 1,
+			version: HeaderVersion::default(),
 			height: 0,
 			timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
 			prev_hash: ZERO_HASH,
@@ -239,7 +275,7 @@ impl Writeable for BlockHeader {
 		if writer.serialization_mode() != ser::SerializationMode::Hash {
 			self.write_pre_pow(writer)?;
 		}
-		self.pow.write(self.version, writer)?;
+		self.pow.write(writer)?;
 		Ok(())
 	}
 }
@@ -247,7 +283,8 @@ impl Writeable for BlockHeader {
 /// Deserialization of a block header
 impl Readable for BlockHeader {
 	fn read(reader: &mut dyn Reader) -> Result<BlockHeader, ser::Error> {
-		let (version, height, timestamp) = ser_multiread!(reader, read_u16, read_u64, read_i64);
+		let version = HeaderVersion::read(reader)?;
+		let (height, timestamp) = ser_multiread!(reader, read_u64, read_i64);
 		let prev_hash = Hash::read(reader)?;
 		let prev_root = Hash::read(reader)?;
 		let output_root = Hash::read(reader)?;
@@ -255,12 +292,20 @@ impl Readable for BlockHeader {
 		let kernel_root = Hash::read(reader)?;
 		let total_kernel_offset = BlindingFactor::read(reader)?;
 		let (output_mmr_size, kernel_mmr_size) = ser_multiread!(reader, read_u64, read_u64);
-		let pow = ProofOfWork::read(version, reader)?;
+		let pow = ProofOfWork::read(reader)?;
 
 		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
 			|| timestamp < MIN_DATE.and_hms(0, 0, 0).timestamp()
 		{
 			return Err(ser::Error::CorruptedData);
+		}
+
+		// Check the block version before proceeding any further.
+		// We want to do this here because blocks can be pretty large
+		// and we want to halt processing as early as possible.
+		// If we receive an invalid block version then the peer is not on our hard-fork.
+		if !consensus::valid_header_version(height, version) {
+			return Err(ser::Error::InvalidBlockVersion);
 		}
 
 		Ok(BlockHeader {
@@ -283,9 +328,9 @@ impl Readable for BlockHeader {
 impl BlockHeader {
 	/// Write the pre-hash portion of the header
 	pub fn write_pre_pow<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		self.version.write(writer)?;
 		ser_multiwrite!(
 			writer,
-			[write_u16, self.version],
 			[write_u64, self.height],
 			[write_i64, self.timestamp.timestamp()],
 			[write_fixed_bytes, &self.prev_hash],
@@ -309,7 +354,7 @@ impl BlockHeader {
 		{
 			let mut writer = ser::BinWriter::new(&mut header_buf);
 			self.write_pre_pow(&mut writer).unwrap();
-			self.pow.write_pre_pow(self.version, &mut writer).unwrap();
+			self.pow.write_pre_pow(&mut writer).unwrap();
 			writer.write_u64(self.pow.nonce).unwrap();
 		}
 		header_buf
@@ -339,7 +384,7 @@ impl BlockHeader {
 
 	/// Total kernel offset for the chain state up to and including this block.
 	pub fn total_kernel_offset(&self) -> BlindingFactor {
-		self.total_kernel_offset
+		self.total_kernel_offset.clone()
 	}
 }
 
@@ -515,8 +560,10 @@ impl Block {
 			.with_kernel(reward_kern);
 
 		// Now add the kernel offset of the previous block for a total
-		let total_kernel_offset =
-			committed::sum_kernel_offsets(vec![agg_tx.offset, prev.total_kernel_offset], vec![])?;
+		let total_kernel_offset = committed::sum_kernel_offsets(
+			vec![agg_tx.offset.clone(), prev.total_kernel_offset.clone()],
+			vec![],
+		)?;
 
 		let now = Utc::now().timestamp();
 		let timestamp = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(now, 0), Utc);
@@ -653,7 +700,7 @@ impl Block {
 		// verify.body.outputs and kernel sums
 		let (_utxo_sum, kernel_sum) = self.verify_kernel_sums(
 			self.header.overage(),
-			self.block_kernel_offset(*prev_kernel_offset)?,
+			self.block_kernel_offset(prev_kernel_offset.clone())?,
 		)?;
 
 		Ok(kernel_sum)

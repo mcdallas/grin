@@ -26,6 +26,7 @@ use self::core::{consensus, global};
 use failure::Fail;
 use grin_core as core;
 use grin_keychain as keychain;
+use std::mem;
 
 /// Dandelion "epoch" length.
 const DANDELION_EPOCH_SECS: u16 = 600;
@@ -162,7 +163,7 @@ pub struct TxSource {
 }
 
 /// Possible errors when interacting with the transaction pool.
-#[derive(Debug, Fail)]
+#[derive(Debug, Fail, PartialEq)]
 pub enum PoolError {
 	/// An invalid pool entry caused by underlying tx validation error
 	#[fail(display = "Invalid Tx {}", _0)]

@@ -15,7 +15,7 @@
 use crate::util::RwLock;
 use std::convert::From;
 use std::fs::File;
-use std::io;
+use std::io::{self, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
 
@@ -30,6 +30,7 @@ use crate::core::core::hash::Hash;
 use crate::core::global;
 use crate::core::pow::Difficulty;
 use crate::core::ser::{self, Readable, Reader, Writeable, Writer};
+use crate::msg::ProtocolVersion;
 use grin_store;
 
 /// Maximum number of block headers a peer should ever send
@@ -49,7 +50,7 @@ pub const MAX_LOCATORS: u32 = 20;
 const BAN_WINDOW: i64 = 10800;
 
 /// The max peer count
-const PEER_MAX_COUNT: u32 = 25;
+const PEER_MAX_COUNT: u32 = 125;
 
 /// min preferred peer count
 const PEER_MIN_PREFERRED_COUNT: u32 = 8;
@@ -68,10 +69,6 @@ pub enum Error {
 	Chain(chain::Error),
 	PeerWithSelf,
 	NoDandelionRelay,
-	ProtocolMismatch {
-		us: u32,
-		peer: u32,
-	},
 	GenesisMismatch {
 		us: Hash,
 		peer: Hash,
@@ -336,7 +333,7 @@ bitflags! {
 	}
 }
 
-/// Types of connection
+// Types of connection
 enum_from_primitive! {
 	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 	pub enum Direction {
@@ -345,9 +342,9 @@ enum_from_primitive! {
 	}
 }
 
-/// Ban reason
+// Ban reason
 enum_from_primitive! {
-	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, AsRefStr)]
 	pub enum ReasonForBan {
 		None = 0,
 		BadBlock = 1,
@@ -374,7 +371,7 @@ pub struct PeerLiveInfo {
 pub struct PeerInfo {
 	pub capabilities: Capabilities,
 	pub user_agent: String,
-	pub version: u32,
+	pub version: ProtocolVersion,
 	pub addr: PeerAddr,
 	pub direction: Direction,
 	pub live_info: Arc<RwLock<PeerLiveInfo>>,
@@ -436,7 +433,7 @@ impl PeerInfo {
 pub struct PeerInfoDisplay {
 	pub capabilities: Capabilities,
 	pub user_agent: String,
-	pub version: u32,
+	pub version: ProtocolVersion,
 	pub addr: PeerAddr,
 	pub direction: Direction,
 	pub total_difficulty: Difficulty,
@@ -448,7 +445,7 @@ impl From<PeerInfo> for PeerInfoDisplay {
 		PeerInfoDisplay {
 			capabilities: info.capabilities.clone(),
 			user_agent: info.user_agent.clone(),
-			version: info.version.clone(),
+			version: info.version,
 			addr: info.addr.clone(),
 			direction: info.direction.clone(),
 			total_difficulty: info.total_difficulty(),
@@ -529,6 +526,10 @@ pub trait ChainAdapter: Sync + Send {
 
 	/// Gets a full block by its hash.
 	fn get_block(&self, h: Hash) -> Option<core::Block>;
+
+	fn kernel_data_read(&self) -> Result<File, chain::Error>;
+
+	fn kernel_data_write(&self, reader: &mut Read) -> Result<bool, chain::Error>;
 
 	/// Provides a reading view into the current txhashset state as well as
 	/// the required indexes for a consumer to rewind to a consistant state

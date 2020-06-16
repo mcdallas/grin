@@ -16,7 +16,8 @@
 
 use chrono::Utc;
 use num::FromPrimitive;
-use rand::{thread_rng, Rng};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use crate::core::ser::{self, Readable, Reader, Writeable, Writer};
 use crate::types::{Capabilities, PeerAddr, ReasonForBan};
@@ -27,7 +28,7 @@ const STORE_SUBPATH: &'static str = "peers";
 
 const PEER_PREFIX: u8 = 'P' as u8;
 
-/// Types of messages
+// Types of messages
 enum_from_primitive! {
 	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 	pub enum State {
@@ -158,7 +159,7 @@ impl PeerStore {
 			.map(|(_, v)| v)
 			.filter(|p| p.flags == state && p.capabilities.contains(cap))
 			.collect::<Vec<_>>();
-		thread_rng().shuffle(&mut peers[..]);
+		peers[..].shuffle(&mut thread_rng());
 		Ok(peers.iter().take(count).cloned().collect())
 	}
 

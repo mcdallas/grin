@@ -28,7 +28,20 @@ use crate::pow::{self, new_cuckaroo_ctx, new_cuckatoo_ctx, EdgeType, PoWContext}
 /// different sets of parameters for different purposes,
 /// e.g. CI, User testing, production values
 use crate::util::RwLock;
+extern crate statsd;
+use statsd::Client;
 
+lazy_static! {
+	/// Statsd client
+	pub static ref STATS: Client = Client::new(
+		"127.0.0.1:8125",
+		match is_floonet() {
+			true => "floo",
+			false => "main",
+		}
+	)
+	.unwrap();
+}
 /// Define these here, as they should be developer-set, not really tweakable
 /// by users
 

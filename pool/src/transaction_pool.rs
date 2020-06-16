@@ -21,6 +21,7 @@ use self::core::core::hash::{Hash, Hashed};
 use self::core::core::id::ShortId;
 use self::core::core::verifier_cache::VerifierCache;
 use self::core::core::{transaction, Block, BlockHeader, Transaction, Weighting};
+use self::core::global::STATS;
 use self::util::RwLock;
 use crate::pool::Pool;
 use crate::types::{BlockChain, PoolAdapter, PoolConfig, PoolEntry, PoolError, TxSource};
@@ -138,7 +139,13 @@ impl TransactionPool {
 		}
 
 		// Do we have the capacity to accept this transaction?
-		self.is_acceptable(&tx, stem)?;
+		let acceptability = self.is_acceptable(&tx, stem);
+		let mut evict = false;
+		if !stem && acceptability.as_ref().err() == Some(&PoolError::OverCapacity) {
+			evict = true;
+		} else if acceptability.is_err() {
+			return acceptability;
+		}
 
 		// Make sure the transaction is valid before anything else.
 		// Validate tx accounting for max tx weight.
@@ -171,7 +178,34 @@ impl TransactionPool {
 			self.adapter.tx_accepted(&entry.tx);
 		}
 
+		// Transaction passed all the checks but we have to make space for it
+		if evict {
+			self.evict_from_txpool();
+		}
+
 		Ok(())
+	}
+
+	// Remove the last transaction from the flattened bucket transactions.
+	// No other tx depends on it, it has low fee_to_weight and is unlikely to participate in any cut-through.
+	pub fn evict_from_txpool(&mut self) {
+		// Get bucket transactions
+		let bucket_transactions = self.txpool.bucket_transactions(Weighting::NoLimit);
+
+		// Get last transaction and remove it
+		match bucket_transactions.last() {
+			Some(evictable_transaction) => {
+				// Remove transaction
+				self.txpool.entries = self
+					.txpool
+					.entries
+					.iter()
+					.filter(|x| x.tx != *evictable_transaction)
+					.map(|x| x.clone())
+					.collect::<Vec<_>>();
+			}
+			None => (),
+		}
 	}
 
 	// Old txs will "age out" after 30 mins.
@@ -240,16 +274,14 @@ impl TransactionPool {
 	/// full the pool is and the transaction weight.
 	fn is_acceptable(&self, tx: &Transaction, stem: bool) -> Result<(), PoolError> {
 		if self.total_size() > self.config.max_pool_size {
-			// TODO evict old/large transactions instead
 			return Err(PoolError::OverCapacity);
 		}
 
 		// Check that the stempool can accept this transaction
-		if stem {
-			if self.stempool.size() > self.config.max_stempool_size {
-				// TODO evict old/large transactions instead
-				return Err(PoolError::OverCapacity);
-			}
+		if stem && self.stempool.size() > self.config.max_stempool_size {
+			return Err(PoolError::OverCapacity);
+		} else if self.total_size() > self.config.max_pool_size {
+			return Err(PoolError::OverCapacity);
 		}
 
 		// for a basic transaction (1 input, 2 outputs) -
@@ -268,6 +300,15 @@ impl TransactionPool {
 	/// Note: we only consider the txpool here as stempool is under embargo.
 	pub fn total_size(&self) -> usize {
 		self.txpool.size()
+	}
+
+	pub fn log_stats(&self) {
+		let txpoolsize: usize = self.txpool.entries.iter().map(|x| x.tx.size()).sum();
+		STATS.gauge("pool.txpool.size", txpoolsize as f64);
+		let stempoolsize: usize = self.stempool.entries.iter().map(|x| x.tx.size()).sum();
+		STATS.gauge("pool.stempool.size", stempoolsize as f64);
+		STATS.gauge("pool.txpool.txs", self.total_size() as f64);
+		STATS.gauge("pool.stempool.txs", self.stempool.size() as f64);
 	}
 
 	/// Returns a vector of transactions from the txpool so we can build a

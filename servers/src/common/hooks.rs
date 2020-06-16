@@ -23,6 +23,7 @@ use crate::chain::BlockStatus;
 use crate::common::types::{ServerConfig, WebHooksConfig};
 use crate::core::core;
 use crate::core::core::hash::Hashed;
+use crate::core::global::STATS;
 use crate::p2p::types::PeerAddr;
 use futures::future::Future;
 use hyper::client::HttpConnector;
@@ -45,6 +46,7 @@ pub fn init_net_hooks(config: &ServerConfig) -> Vec<Box<dyn NetEvents + Send + S
 	{
 		list.push(Box::new(WebHook::from_config(&config.webhook_config)));
 	}
+	list.push(Box::new(Stats));
 	list
 }
 
@@ -55,6 +57,7 @@ pub fn init_chain_hooks(config: &ServerConfig) -> Vec<Box<dyn ChainEvents + Send
 	if config.webhook_config.block_accepted_url.is_some() {
 		list.push(Box::new(WebHook::from_config(&config.webhook_config)));
 	}
+	list.push(Box::new(Stats));
 	list
 }
 
@@ -76,6 +79,50 @@ pub trait NetEvents {
 pub trait ChainEvents {
 	/// Triggers when a new block is accepted by the chain (might be a Reorg or a Fork)
 	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {}
+}
+
+struct Stats;
+
+impl NetEvents for Stats {
+	fn on_transaction_received(&self, _tx: &core::Transaction) {
+		STATS.incr("net.txs");
+	}
+
+	fn on_block_received(&self, _block: &core::Block, _addr: &PeerAddr) {
+		STATS.incr("net.blocks");
+	}
+
+	fn on_header_received(&self, _header: &core::BlockHeader, _addr: &PeerAddr) {
+		STATS.incr("net.headers");
+	}
+}
+impl ChainEvents for Stats {
+	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {
+		let status = match status {
+			BlockStatus::Reorg(_) => "reorg",
+			BlockStatus::Fork => "fork",
+			BlockStatus::Next => "head",
+		};
+		let mut pipe = STATS.pipeline();
+		pipe.incr(&format!("chain.block.accepted.{}", status));
+		pipe.gauge("chain.block.height", block.header.height as f64);
+		pipe.gauge(
+			"chain.block.totaldiff",
+			block.header.pow.total_difficulty.to_num() as f64,
+		);
+		pipe.gauge(
+			"chain.block.scaling",
+			block.header.pow.secondary_scaling as f64,
+		);
+		pipe.gauge("chain.block.utxo.size", block.header.output_mmr_size as f64);
+		pipe.gauge(
+			"chain.block.kernel.size",
+			block.header.kernel_mmr_size as f64,
+		);
+		let bits = format!("chain.block.edgebits.{}", block.header.pow.proof.edge_bits);
+		pipe.incr(&bits);
+		pipe.send(&STATS)
+	}
 }
 
 /// Basic Logger
@@ -117,11 +164,12 @@ impl NetEvents for EventLogger {
 impl ChainEvents for EventLogger {
 	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {
 		match status {
-			BlockStatus::Reorg => {
+			BlockStatus::Reorg(depth) => {
 				warn!(
-					"block_accepted (REORG!): {:?} at {} (diff: {})",
+					"block_accepted (REORG!): {:?} at {} (depth: {}, diff: {})",
 					block.hash(),
 					block.header.height,
+					depth,
 					block.header.total_difficulty(),
 				);
 			}
@@ -261,16 +309,29 @@ impl WebHook {
 
 impl ChainEvents for WebHook {
 	fn on_block_accepted(&self, block: &core::Block, status: &BlockStatus) {
-		let status = match status {
-			BlockStatus::Reorg => "reorg",
+		let status_str = match status {
+			BlockStatus::Reorg(_) => "reorg",
 			BlockStatus::Fork => "fork",
 			BlockStatus::Next => "head",
 		};
-		let payload = json!({
-			"hash": block.header.hash().to_hex(),
-			"status": status,
-			"data": block
-		});
+
+		// Add additional `depth` field to the JSON in case of reorg
+		let payload = if let BlockStatus::Reorg(depth) = status {
+			json!({
+				"hash": block.header.hash().to_hex(),
+				"status": status_str,
+				"data": block,
+
+				"depth": depth
+			})
+		} else {
+			json!({
+				"hash": block.header.hash().to_hex(),
+				"status": status_str,
+				"data": block
+			})
+		};
+
 		if !self.make_request(&payload, &self.block_accepted_url) {
 			error!(
 				"Failed to serialize block {} at height {}",

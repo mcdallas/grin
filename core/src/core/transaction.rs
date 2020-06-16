@@ -32,10 +32,11 @@ use crate::{consensus, global};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
+use std::mem;
 use std::sync::Arc;
 use std::{error, fmt};
 
-/// Enum of various supported kernel "features".
+// Enum of various supported kernel "features".
 enum_from_primitive! {
 	/// Various flavors of tx kernel.
 	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -387,10 +388,7 @@ pub enum Weighting {
 	AsTransaction,
 	/// Tx representing a tx with artificially limited max_weight.
 	/// This is used when selecting mineable txs from the pool.
-	AsLimitedTransaction {
-		/// The maximum (block) weight that we will allow.
-		max_weight: usize,
-	},
+	AsLimitedTransaction(usize),
 	/// Tx represents a block (max block weight).
 	AsBlock,
 	/// No max weight limit (skip the weight check).
@@ -528,6 +526,18 @@ impl TransactionBody {
 		Ok(body)
 	}
 
+	pub fn size(&self) -> usize {
+		let isize = self.inputs.len() * secp::constants::PEDERSEN_COMMITMENT_SIZE;
+		let osize = self.outputs.len()
+			* (secp::constants::PEDERSEN_COMMITMENT_SIZE
+				+ secp::constants::SINGLE_BULLET_PROOF_SIZE);
+		let ksize = self.kernels.len()
+			* (mem::size_of::<TxKernel>()
+				+ secp::constants::AGG_SIGNATURE_SIZE
+				+ secp::constants::PEDERSEN_COMMITMENT_SIZE);
+		isize + osize + ksize + mem::size_of::<TransactionBody>()
+	}
+
 	/// Builds a new body with the provided inputs added. Existing
 	/// inputs, if any, are kept intact.
 	/// Sort order is maintained.
@@ -628,7 +638,7 @@ impl TransactionBody {
 		//
 		let max_weight = match weighting {
 			Weighting::AsTransaction => global::max_block_weight().saturating_sub(coinbase_weight),
-			Weighting::AsLimitedTransaction { max_weight } => {
+			Weighting::AsLimitedTransaction(max_weight) => {
 				min(global::max_block_weight(), max_weight).saturating_sub(coinbase_weight)
 			}
 			Weighting::AsBlock => global::max_block_weight(),
@@ -846,6 +856,12 @@ impl Transaction {
 		}
 	}
 
+	pub fn size(&self) -> usize {
+		util::secp::constants::SECRET_KEY_SIZE
+			+ self.body.size()
+			+ std::mem::size_of::<Transaction>()
+	}
+
 	/// Creates a new transaction initialized with
 	/// the provided inputs, outputs, kernels
 	pub fn new(inputs: Vec<Input>, outputs: Vec<Output>, kernels: Vec<TxKernel>) -> Transaction {
@@ -960,8 +976,14 @@ impl Transaction {
 	) -> Result<(), Error> {
 		self.body.validate(weighting, verifier)?;
 		self.body.verify_features()?;
-		self.verify_kernel_sums(self.overage(), self.offset)?;
+		self.verify_kernel_sums(self.overage(), self.offset.clone())?;
 		Ok(())
+	}
+
+	/// Can be used to compare txs by their fee/weight ratio.
+	/// Don't use these values for anything else though due to precision multiplier.
+	pub fn fee_to_weight(&self) -> u64 {
+		self.fee() * 1_000 / self.tx_weight() as u64
 	}
 
 	/// Calculate transaction weight
@@ -1211,7 +1233,7 @@ impl Input {
 	}
 }
 
-/// Enum of various supported kernel "features".
+// Enum of various supported kernel "features".
 enum_from_primitive! {
 	/// Various flavors of tx kernel.
 	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
